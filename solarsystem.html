@@ -7,109 +7,174 @@
 <style>
   body { overflow: hidden; margin: 0; background: #000; }
   canvas { display: block; background: radial-gradient(circle, rgba(20,20,30,1) 0%, rgba(0,0,10,1) 100%); }
+  #info { position: absolute; color: white; top: 0; left: 0; padding: 10px; font-size: larger; }
 </style>
 </head>
 <body>
 <canvas id="solarSystem"></canvas>
+<div id="info"></div>
+
 <script>
-  const canvas = document.getElementById('solarSystem');
-  const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('solarSystem');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+const sun = { x: canvas.width / 2, y: canvas.height / 2, radius: 20, color: 'yellow' };
+let simulationSpeed = 0.30;
+let zoomLevel = 0.45;
+let simulatedDays = 0;
+const planets = [
+{ name: 'Mercury', radius: 4, color: 'rgb(169, 169, 169)', distance: 58, orbitSpeed: 0.047 }, // darkgray
+{ name: 'Venus', radius: 9, color: 'rgb(240, 230, 140)', distance: 108, orbitSpeed: 0.035 }, // khaki
+{ name: 'Earth', radius: 9.5, color: 'rgb(0, 0, 255)', distance: 150, orbitSpeed: 0.030 }, // blue
+{ name: 'Mars', radius: 5, color: 'rgb(255, 0, 0)', distance: 228, orbitSpeed: 0.024 }, // red
+{ name: 'Jupiter', radius: 20, color: 'rgb(255, 165, 0)', distance: 378, orbitSpeed: 0.013 }, // orange
+{ name: 'Saturn', radius: 17, color: 'rgb(255, 215, 0)', distance: 529, orbitSpeed: 0.009 }, // gold
+{ name: 'Uranus', radius: 14, color: 'rgb(173, 216, 230)', distance: 620, orbitSpeed: 0.006 }, // lightblue
+{ name: 'Neptune', radius: 13, color: 'rgb(0, 0, 255)', distance: 780, orbitSpeed: 0.005 } // blue
+];
+const backgroundStars = [];
+const shootingStars = [];
 
-  const sun = { x: canvas.width / 2, y: canvas.height / 2, radius: 30, color: 'yellow' };
-  let simulationSpeed = 0.05;
-  let zoomLevel = 1;
-
-  const planets = [
-    { name: 'Mercury', radius: 4, color: 'darkgray', distance: 58, orbitSpeed: 0.047 },
-    { name: 'Venus', radius: 9, color: 'khaki', distance: 108, orbitSpeed: 0.035 },
-    { name: 'Earth', radius: 9.5, color: 'blue', distance: 150, orbitSpeed: 0.030 },
-    { name: 'Mars', radius: 5, color: 'red', distance: 228, orbitSpeed: 0.024 },
-    { name: 'Jupiter', radius: 20, color: 'orange', distance: 778, orbitSpeed: 0.013 },
-    { name: 'Saturn', radius: 17, color: 'gold', distance: 1429, orbitSpeed: 0.009 },
-    { name: 'Uranus', radius: 14, color: 'lightblue', distance: 2871, orbitSpeed: 0.006 },
-    { name: 'Neptune', radius: 13, color: 'blue', distance: 4495, orbitSpeed: 0.005 }
-  ];
-
-  const shootingStars = [];
-  const backgroundStars = []; // Array to hold the background stars
-
-
-  function initBackgroundStars() {
-   for (let i = 0; i < 100; i++) {
-     const x = Math.random() * canvas.width;
-     const y = Math.random() * canvas.height;
-     const size = Math.random() * 2;
-     backgroundStars.push({x, y, size});
-   }
- }
-
- function drawBackground() {
-   backgroundStars.forEach(star => {
-     ctx.fillStyle = 'white';
-     ctx.beginPath();
-     ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-     ctx.fill();
-   });
- }
- initBackgroundStars();
-
+function initBackgroundStars() {
+    for (let i = 0; i < 800; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      const size = Math.random() * 1;
+      backgroundStars.push({x, y, size});
+    }
+  }
+  function drawBackground() {
+    backgroundStars.forEach(star => {
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
   function drawSun() {
-    ctx.fillStyle = sun.color;
+    const sunGradient = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, sun.radius);
+    sunGradient.addColorStop(0, 'rgba(255, 204, 0, 1)'); // Bright center
+    sunGradient.addColorStop(0.8, 'rgba(255, 164, 0, 1)'); // Transition to darker
+    sunGradient.addColorStop(1, 'rgba(255, 100, 0, 0)'); // Outer edge, fully transparent
+    
+    ctx.fillStyle = sunGradient;
+    // Enhance glow effect by increasing shadowBlur
+    ctx.shadowBlur = 40; // Increased shadowBlur for a wider glow
+    ctx.shadowColor = 'rgba(255, 204, 0, 0.7)'; // Adjusted for a noticeable but not overpowering glow
+    
     ctx.beginPath();
     ctx.arc(sun.x, sun.y, sun.radius, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Reset shadowBlur for subsequent drawings
+    ctx.shadowBlur = 0;
   }
-
   function drawOrbit(distance) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.beginPath();
-    ctx.arc(sun.x, sun.y, distance * zoomLevel, 0, Math.PI * 2);
+    ctx.arc(sun.x, sun.y, distance * zoomLevel, 0, Math.PI * 2, false);
     ctx.stroke();
   }
-
   function drawPlanet(planet, angle) {
     const x = sun.x + Math.cos(angle) * planet.distance * zoomLevel;
     const y = sun.y + Math.sin(angle) * planet.distance * zoomLevel;
-    ctx.fillStyle = planet.color;
+    if (planet.name === 'Saturn') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.ellipse(x, y, planet.radius * 1.5, planet.radius * 0.5, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, planet.radius);
+  
+    // Determine the light and dark colors based on the planet.color
+    const lightColor = getLighterColor(planet.color, 0.7); // Simulate sunlight
+    const darkColor = getDarkerColor(planet.color, 0.7); // Simulate shadow
+    
+    gradient.addColorStop(0, lightColor);
+    gradient.addColorStop(1, darkColor);
+    
+    ctx.fillStyle = gradient;
+    
     ctx.beginPath();
     ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
     ctx.fill();
+
+   
     // Draw planet name
     ctx.fillStyle = 'white';
     ctx.font = '14px Arial';
     ctx.fillText(planet.name, x + planet.radius + 3, y + planet.radius);
+    
   }
-
+  function getLighterColor(color, percent) {
+    // Assuming color is in the form of "rgb(r, g, b)"
+    // Parse the color to get r, g, b values
+    let [r, g, b] = color.match(/\d+/g).map(Number);
+    // Increase each component according to the percent, capped at 255
+    r = Math.min(255, r + r * percent);
+    g = Math.min(255, g + g * percent);
+    b = Math.min(255, b + b * percent);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  
+  function getDarkerColor(color, percent) {
+    // Assuming color is in the form of "rgb(r, g, b)"
+    let [r, g, b] = color.match(/\d+/g).map(Number);
+    // Decrease each component according to the percent, capped at 0
+    r = Math.max(0, r - r * percent);
+    g = Math.max(0, g - g * percent);
+    b = Math.max(0, b - b * percent);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  
   function drawShootingStar() {
     shootingStars.forEach((star, index) => {
+      // Tail effect
+      const tailLength = 20;
+      const tailOpacity = Math.max(1 - Math.abs(star.vx) / 5, 0.3); // Adjust based on speed
+      const gradient = ctx.createLinearGradient(star.x, star.y, star.x - tailLength * star.vx, star.y - tailLength * star.vy);
+      gradient.addColorStop(0, 'rgba(255,255,255,' + tailOpacity + ')');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  
       ctx.fillStyle = 'white';
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(star.x, star.y, 2, 0, Math.PI * 5);
-      ctx.fill();
-
+      ctx.moveTo(star.x, star.y);
+      ctx.lineTo(star.x - tailLength * star.vx, star.y - tailLength * star.vy);
+      ctx.stroke();
+  
       // Update shooting star position
       star.x += star.vx;
       star.y += star.vy;
-
+  
       // Remove shooting star if it goes out of bounds
       if (star.x > canvas.width || star.y > canvas.height) {
         shootingStars.splice(index, 1);
       }
     });
   }
-
   function addShootingStar() {
     if (Math.random() < 0.02) { // Random chance to add a shooting star
       const x = Math.random() * canvas.width;
       const y = 0;
-      const vx = 2 + Math.random() * 3;
-      const vy = 2 + Math.random() * 3;
+      const vx = 2 + Math.random() * 4;
+      const vy = 2 + Math.random() * 4;
       shootingStars.push({ x, y, vx, vy });
     }
   }
+  function updateSimulationInfo() {
+    // Convert simulated days to years and remaining days for display
+    const years = Math.floor(simulatedDays / 365);
+    const days = simulatedDays % 365;
+  
+    // Update the info div with current simulation speed and simulated time
+    document.getElementById('info').innerHTML = `Simulation Speed: ${simulationSpeed.toFixed(2)}<br>Simulated Time: ${years} years, ${days} days`;
+  }
+
 
   let time = 0;
   function animate() {
@@ -124,6 +189,8 @@
     drawShootingStar();
     addShootingStar();
     time += simulationSpeed;
+     simulatedDays += simulationSpeed; // Increment simulated days by the simulation speed
+    updateSimulationInfo();
     requestAnimationFrame(animate);
   }
 
@@ -139,7 +206,28 @@
     }
   });
 
-  animate();
+  canvas.addEventListener('wheel', function(event) {
+    // Prevent the default scrolling behavior to zoom in/out the canvas instead
+    event.preventDefault();
+
+    // Adjust zoom level based on the scroll direction
+    const zoomIntensity = 0.1; // Adjust the intensity of zoom per scroll
+    if (event.deltaY < 0) {
+        // Scrolling up, zoom in
+        zoomLevel *= (1 + zoomIntensity);
+    } else {
+        // Scrolling down, zoom out
+        zoomLevel *= (1 - zoomIntensity);
+    }
+
+    // Optionally, you can limit the zoom level to prevent zooming too far in or out
+    zoomLevel = Math.min(Math.max(zoomLevel, 0.1), 10); // Example limits: min zoom 0.1, max zoom 10
+
+    // Update the display or redraw the scene with the new zoom level
+    // No need to call animate() here as it's already running in a loop
+});
+initBackgroundStars();
+animate();
 </script>
 </body>
 </html>
